@@ -1,0 +1,30 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+frizzlabs-ddns
+
+# Test binary built using `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+
+# State and local configuration files
+state.json
+config.json
+*.tmp
+
+# Environment / IDE files
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS specific
+.DS_Store
+Thumbs.db

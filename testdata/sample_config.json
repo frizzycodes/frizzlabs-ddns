@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "provider": "duckdns",
+  "interface": "eth0",
+  "matchDefaultRoute": false,
+  "domain": "test-domain",
+  "token": "test-token-12345",
+  "timeoutSec": 5
+}

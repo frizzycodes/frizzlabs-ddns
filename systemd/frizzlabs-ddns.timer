@@ -1,0 +1,11 @@
+[Unit]
+Description=Run FrizzLabs Dynamic DNS Updater every minute
+Documentation=https://github.com/frizzlabs/frizzlabs-ddns
+
+[Timer]
+OnCalendar=*:0/1
+Persistent=true
+RandomizedDelaySec=5
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "provider": "duckdns",
+  "interface": "enp4s0",
+  "matchDefaultRoute": true,
+  "domain": "my-homelab",
+  "token": "00000000-0000-0000-0000-000000000000",
+  "timeoutSec": 10
+}

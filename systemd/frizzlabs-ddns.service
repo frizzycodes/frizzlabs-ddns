@@ -1,0 +1,21 @@
+[Unit]
+Description=FrizzLabs Dynamic DNS IPv6 Updater Daemon
+Documentation=https://github.com/frizzlabs/frizzlabs-ddns
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/bin/frizzlabs-ddns -config /etc/frizzlabs-ddns/config.json -state /var/lib/frizzlabs-ddns/state.json
+
+# Hardening security sandboxing
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/frizzlabs-ddns
+PrivateTmp=true
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target
