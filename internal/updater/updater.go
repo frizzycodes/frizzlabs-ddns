@@ -1,4 +1,4 @@
-// Package updater orchestrates network address detection, state reconciliation, and provider record synchronization with retries.
+// Package updater orchestrates network address detection, DNS resolution reconciliation, and provider record synchronization with retries.
 package updater
 
 import (
@@ -6,47 +6,51 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/frizzlabs/frizzlabs-ddns/internal/config"
+	"github.com/frizzlabs/frizzlabs-ddns/internal/dns"
 	"github.com/frizzlabs/frizzlabs-ddns/internal/network"
 	"github.com/frizzlabs/frizzlabs-ddns/internal/provider"
 	"github.com/frizzlabs/frizzlabs-ddns/internal/state"
 )
 
-// Runner coordinates address resolution, comparison with stored state, and DNS provider updates.
+// Runner coordinates address resolution, DNS drift verification, and DNS provider updates.
 type Runner struct {
-	cfg      *config.Config
-	detector network.Detector
-	provider provider.Provider
-	stateMgr state.Manager
-	logger   *slog.Logger
-	dryRun   bool
+	cfg         *config.Config
+	detector    network.Detector
+	provider    provider.Provider
+	stateMgr    state.Manager
+	dnsResolver dns.Resolver
+	logger      *slog.Logger
+	dryRun      bool
 }
 
 // NewRunner constructs a Runner with dependency injection.
-func NewRunner(cfg *config.Config, det network.Detector, prov provider.Provider, stMgr state.Manager, l *slog.Logger, dryRun bool) *Runner {
+func NewRunner(cfg *config.Config, det network.Detector, prov provider.Provider, stMgr state.Manager, resolver dns.Resolver, l *slog.Logger, dryRun bool) *Runner {
 	return &Runner{
-		cfg:      cfg,
-		detector: det,
-		provider: prov,
-		stateMgr: stMgr,
-		logger:   l,
-		dryRun:   dryRun,
+		cfg:         cfg,
+		detector:    det,
+		provider:    prov,
+		stateMgr:    stMgr,
+		dnsResolver: resolver,
+		logger:      l,
+		dryRun:      dryRun,
 	}
 }
 
-// Run executes a single reconciliation pass.
+// Run executes a single reconciliation pass comparing local IPv6, cached state, and live DNS AAAA records.
 func (r *Runner) Run(ctx context.Context) error {
-	r.logger.Info("starting Dynamic DNS IPv6 reconciliation", "provider", r.provider.Name(), "domain", r.cfg.Domain, "dryRun", r.dryRun)
+	r.logger.Info("starting Dynamic DNS IPv6 reconciliation engine", "provider", r.provider.Name(), "domain", r.cfg.Domain, "dryRun", r.dryRun)
 
 	// 1. Detect current global IPv6 address
-	detectedIP, err := r.detector.DetectIPv6(ctx, r.cfg.Interface, r.cfg.MatchDefaultRoute)
+	currentIP, err := r.detector.DetectIPv6(ctx, r.cfg.Interface, r.cfg.MatchDefaultRoute)
 	if err != nil {
 		return fmt.Errorf("detecting network address: %w", err)
 	}
 
-	r.logger.Info("detected current global IPv6 address", "ipv6", detectedIP.String())
+	r.logger.Info("detected current global IPv6 address", "ipv6", currentIP.String())
 
 	// 2. Load cached state
 	st, err := r.stateMgr.Load()
@@ -56,35 +60,83 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	cachedIP, _ := st.GetLastIPv6()
 
-	// 3. Compare detected IP with cached IP
-	if cachedIP.IsValid() && cachedIP == detectedIP {
-		r.logger.Info("IPv6 address has not changed, update skipped", "ipv6", detectedIP.String(), "lastUpdated", st.LastUpdated.Format(time.RFC3339))
-		return nil
+	// 3. Resolve live DNS AAAA record if verifyDNS is enabled
+	var (
+		dnsResolved       bool
+		dnsMatchesCurrent bool
+		resolvedIP        netip.Addr
+	)
+
+	if r.cfg.IsVerifyDNSEnabled() && r.dnsResolver != nil {
+		hostToResolve := r.resolveHostname()
+		r.logger.Debug("querying live AAAA record for drift verification", "host", hostToResolve)
+
+		addrs, err := r.dnsResolver.LookupAAAA(ctx, hostToResolve)
+		if err != nil {
+			r.logger.Warn("unable to resolve AAAA record, falling back to cached state", "host", hostToResolve, "error", err)
+		} else if len(addrs) > 0 {
+			dnsResolved = true
+			resolvedIP = addrs[0]
+			for _, a := range addrs {
+				if a == currentIP {
+					dnsMatchesCurrent = true
+					break
+				}
+			}
+			r.logger.Debug("resolved live AAAA record", "host", hostToResolve, "resolvedIPv6", resolvedIP.String(), "matchesCurrent", dnsMatchesCurrent)
+		}
 	}
 
-	r.logger.Info("IPv6 address change detected", "oldIPv6", cachedIP.String(), "newIPv6", detectedIP.String())
+	// 4. Decision Matrix: Compare Current, Cached, and DNS state
+	ipChanged := !cachedIP.IsValid() || cachedIP != currentIP
+	dnsDrift := dnsResolved && !dnsMatchesCurrent
+
+	switch {
+	case !ipChanged && dnsResolved && dnsMatchesCurrent:
+		r.logger.Info("DNS record already synchronized", "ipv6", currentIP.String(), "lastUpdated", st.LastUpdated.Format(time.RFC3339))
+		return nil
+
+	case !ipChanged && !dnsResolved:
+		r.logger.Info("IPv6 address has not changed, update skipped (DNS verification unconfirmed)", "ipv6", currentIP.String())
+		return nil
+
+	case !ipChanged && dnsDrift:
+		r.logger.Warn("DNS drift detected!", "resolvedAAAA", resolvedIP.String(), "currentIPv6", currentIP.String(), "cachedIPv6", cachedIP.String())
+		r.logger.Info("repairing DNS record...")
+
+	case ipChanged:
+		r.logger.Info("machine IPv6 address change detected", "oldIPv6", cachedIP.String(), "newIPv6", currentIP.String())
+	}
 
 	if r.dryRun {
-		r.logger.Info("[DRY-RUN] Would update DNS provider and save state", "provider", r.provider.Name(), "newIPv6", detectedIP.String())
+		r.logger.Info("[DRY-RUN] Would update DNS provider and save state", "provider", r.provider.Name(), "newIPv6", currentIP.String())
 		return nil
 	}
 
-	// 4. Update DNS Provider with 250ms, 500ms, 1000ms retries
-	if err := r.updateWithRetry(ctx, detectedIP); err != nil {
+	// 5. Execute Provider Update with Retries (250ms, 500ms, 1000ms)
+	if err := r.updateWithRetry(ctx, currentIP); err != nil {
 		return fmt.Errorf("updating DNS provider %s: %w", r.provider.Name(), err)
 	}
 
-	// 5. Save updated state
+	// 6. Update and persist state
 	st.Provider = r.provider.Name()
-	st.SetLastIPv6(detectedIP)
+	st.SetLastIPv6(currentIP)
 	st.LastUpdated = time.Now().UTC()
 
 	if err := r.stateMgr.Save(st); err != nil {
 		return fmt.Errorf("saving state: %w", err)
 	}
 
-	r.logger.Info("successfully updated DNS record and saved state", "ipv6", detectedIP.String())
+	r.logger.Info("successfully updated DNS record and synchronized state", "ipv6", currentIP.String())
 	return nil
+}
+
+func (r *Runner) resolveHostname() string {
+	domain := strings.TrimSpace(r.cfg.Domain)
+	if r.provider.Name() == "duckdns" && !strings.Contains(domain, ".") {
+		return domain + ".duckdns.org"
+	}
+	return domain
 }
 
 // updateWithRetry attempts provider Update with backoff delays of 250ms, 500ms, 1000ms.

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/frizzlabs/frizzlabs-ddns/internal/config"
+	"github.com/frizzlabs/frizzlabs-ddns/internal/dns"
 	"github.com/frizzlabs/frizzlabs-ddns/internal/logger"
 	"github.com/frizzlabs/frizzlabs-ddns/internal/network"
 	"github.com/frizzlabs/frizzlabs-ddns/internal/provider"
@@ -129,12 +130,13 @@ func run(args []string) int {
 		return ExitConfigError
 	}
 
-	// Initialize Network Detector and State Manager
+	// Initialize Network Detector, State Manager, and DNS Resolver
 	detector := network.NewDetector()
 	stateMgr := state.NewFileManager(statePath)
+	sysResolver := dns.NewSystemResolver(nil)
 
 	// Create and run Reconciliation Runner
-	runner := updater.NewRunner(cfg, detector, prov, stateMgr, log, dryRun)
+	runner := updater.NewRunner(cfg, detector, prov, stateMgr, sysResolver, log, dryRun)
 
 	if err := runner.Run(ctx); err != nil {
 		log.Error("reconciliation failed", "error", err)

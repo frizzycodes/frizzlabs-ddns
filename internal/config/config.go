@@ -34,8 +34,19 @@ type Config struct {
 	// StateFile specifies an optional custom override path for state.json.
 	StateFile string `json:"stateFile,omitempty"`
 
+	// VerifyDNS performs DNS AAAA resolution to detect and repair DNS drift when true (defaults to true).
+	VerifyDNS *bool `json:"verifyDNS,omitempty"`
+
 	// TimeoutSec specifies the HTTP client timeout in seconds (defaults to 10s).
 	TimeoutSec int `json:"timeoutSec,omitempty"`
+}
+
+// IsVerifyDNSEnabled returns true if VerifyDNS is enabled (defaults to true if unassigned).
+func (c *Config) IsVerifyDNSEnabled() bool {
+	if c.VerifyDNS == nil {
+		return true
+	}
+	return *c.VerifyDNS
 }
 
 // Load reads and parses a JSON configuration file from the specified path.

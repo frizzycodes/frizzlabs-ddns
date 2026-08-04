@@ -30,6 +30,7 @@
 | `matchDefaultRoute` | Boolean | Conditional | Automatically discovers interface owning the default IPv6 route on Linux when `true`. |
 | `domain` | String | **Yes** | Sub-domain or domain name registered with the DNS provider. |
 | `token` | String | **Yes** | Provider authentication token or API token. |
+| `verifyDNS` | Boolean | No | Resolves live AAAA records to detect and repair DNS drift when `true` (defaults to `true`). |
 | `timeoutSec` | Integer | No | HTTP request timeout in seconds. Defaults to `10` seconds. |
 | `stateFile` | String | No | Custom override path for `state.json`. |
 

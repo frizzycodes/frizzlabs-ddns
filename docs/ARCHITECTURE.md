@@ -12,13 +12,14 @@ It is constructed as a lightweight, single-execution daemon (oneshot model) trig
 graph TD
     A[Systemd Timer / CLI] -->|Execute| B[cmd/frizzlabs-ddns]
     B -->|1. Load & Validate| C[internal/config]
-    B -->|2. Detect IPv6| D[internal/network]
+    B -->|2. Detect Local IPv6| D[internal/network]
     B -->|3. Read Cache| E[internal/state]
-    B -->|4. Reconcile & Compare| F[internal/updater]
-    F -->|5. If Changed -> Update| G[internal/provider]
-    G -->|DuckDNS Provider| H[DuckDNS REST API]
-    G -->|Cloudflare Provider| I[Cloudflare API v4]
-    F -->|6. Atomic Save| E
+    B -->|4. Resolve Live AAAA| F[internal/dns]
+    B -->|5. Reconcile 3 Sources| G[internal/updater]
+    G -->|6. If IP Changed or DNS Drift -> Update| H[internal/provider]
+    H -->|DuckDNS Provider| I[DuckDNS REST API]
+    H -->|Cloudflare Provider| J[Cloudflare API v4]
+    G -->|7. Atomic Save| E
 ```
 
 ---
