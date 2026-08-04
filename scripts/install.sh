@@ -9,6 +9,12 @@ CONFIG_DIR="/etc/frizzlabs-ddns"
 STATE_DIR="/var/lib/frizzlabs-ddns"
 SYSTEMD_DIR="/etc/systemd/system"
 
+# Automatically resolve repository root directory if run from scripts/ subdirectory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
+if [[ -n "${SCRIPT_DIR}" && -d "${SCRIPT_DIR}/../cmd" ]]; then
+    cd "${SCRIPT_DIR}/.."
+fi
+
 echo "=== Installing ${BINARY_NAME} ==="
 
 if [[ $EUID -ne 0 ]]; then
