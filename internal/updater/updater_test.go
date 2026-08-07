@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/frizzlabs/frizzlabs-ddns/internal/config"
+	"github.com/frizzlabs/frizzlabs-ddns/internal/dns"
 	"github.com/frizzlabs/frizzlabs-ddns/internal/state"
 	"github.com/frizzlabs/frizzlabs-ddns/internal/updater"
 )
@@ -137,6 +138,30 @@ func TestRunnerDNSDriftDetectedAndRepaired(t *testing.T) {
 	}
 }
 
+func TestRunnerDNSClearedNXDOMAINRepaired(t *testing.T) {
+	currentAddr := netip.MustParseAddr("2001:db8::1")
+
+	cfg := &config.Config{Domain: "test.com", VerifyDNS: boolPtr(true)}
+	det := &mockDetector{addr: currentAddr}
+	prov := &mockProvider{name: "duckdns"}
+	st := &state.State{}
+	st.SetLastIPv6(currentAddr) // Local state matches current machine IP
+	stMgr := &mockStateMgr{st: st}
+	res := &mockResolver{err: dns.ErrNotFound} // DNS returns NXDOMAIN / record missing!
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runner := updater.NewRunner(cfg, det, prov, stMgr, res, logger, false)
+
+	err := runner.Run(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error during NXDOMAIN drift repair, got %v", err)
+	}
+
+	if prov.calls != 1 {
+		t.Errorf("expected 1 provider update call to repair cleared/NXDOMAIN record, got %d", prov.calls)
+	}
+}
+
 func TestRunnerDNSLookupUnavailableFallback(t *testing.T) {
 	addr := netip.MustParseAddr("2001:db8::1")
 
@@ -146,7 +171,7 @@ func TestRunnerDNSLookupUnavailableFallback(t *testing.T) {
 	st := &state.State{}
 	st.SetLastIPv6(addr)
 	stMgr := &mockStateMgr{st: st}
-	res := &mockResolver{err: errors.New("DNS query timeout")}
+	res := &mockResolver{err: errors.New("DNS query timeout")} // Transient network error
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	runner := updater.NewRunner(cfg, det, prov, stMgr, res, logger, false)
@@ -157,7 +182,7 @@ func TestRunnerDNSLookupUnavailableFallback(t *testing.T) {
 	}
 
 	if prov.calls != 0 {
-		t.Errorf("expected 0 provider calls when DNS lookup fails and state matches, got %d", prov.calls)
+		t.Errorf("expected 0 provider calls when DNS lookup fails due to transient network error and state matches, got %d", prov.calls)
 	}
 }
 

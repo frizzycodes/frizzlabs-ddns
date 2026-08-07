@@ -64,6 +64,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	var (
 		dnsResolved       bool
 		dnsMatchesCurrent bool
+		dnsIsMissing      bool
 		resolvedIP        netip.Addr
 	)
 
@@ -73,7 +74,16 @@ func (r *Runner) Run(ctx context.Context) error {
 
 		addrs, err := r.dnsResolver.LookupAAAA(ctx, hostToResolve)
 		if err != nil {
-			r.logger.Warn("unable to resolve AAAA record, falling back to cached state", "host", hostToResolve, "error", err)
+			if dns.IsNotFound(err) {
+				// Authoritative response: record is missing / cleared / NXDOMAIN on DNS server!
+				dnsResolved = true
+				dnsMatchesCurrent = false
+				dnsIsMissing = true
+				r.logger.Warn("DNS record missing/cleared (NXDOMAIN) on DNS server", "host", hostToResolve)
+			} else {
+				// Transient network error (e.g. timeout, connection refused) -> fallback to cached state
+				r.logger.Warn("unable to resolve AAAA record due to network error, falling back to cached state", "host", hostToResolve, "error", err)
+			}
 		} else if len(addrs) > 0 {
 			dnsResolved = true
 			resolvedIP = addrs[0]
@@ -101,7 +111,11 @@ func (r *Runner) Run(ctx context.Context) error {
 		return nil
 
 	case !ipChanged && dnsDrift:
-		r.logger.Warn("DNS drift detected!", "resolvedAAAA", resolvedIP.String(), "currentIPv6", currentIP.String(), "cachedIPv6", cachedIP.String())
+		if dnsIsMissing {
+			r.logger.Warn("DNS drift detected! Hostname record is missing/cleared (NXDOMAIN) on DNS server", "currentIPv6", currentIP.String(), "cachedIPv6", cachedIP.String())
+		} else {
+			r.logger.Warn("DNS drift detected!", "resolvedAAAA", resolvedIP.String(), "currentIPv6", currentIP.String(), "cachedIPv6", cachedIP.String())
+		}
 		r.logger.Info("repairing DNS record...")
 
 	case ipChanged:

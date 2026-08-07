@@ -2,6 +2,8 @@ package dns_test
 
 import (
 	"context"
+	"errors"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +28,9 @@ func TestSystemResolverContextCancellation(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error for cancelled context, got nil")
 	}
+	if dns.IsNotFound(err) {
+		t.Errorf("context cancellation error should not be classified as IsNotFound")
+	}
 }
 
 func TestSystemResolverNonExistentDomain(t *testing.T) {
@@ -37,7 +42,34 @@ func TestSystemResolverNonExistentDomain(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected resolution failure error for invalid domain, got nil")
 	}
+	if !dns.IsNotFound(err) {
+		t.Errorf("expected IsNotFound(err) == true for non-existent domain, got false (err: %v)", err)
+	}
 	if !strings.Contains(err.Error(), "lookup AAAA") {
 		t.Errorf("unexpected error format: %v", err)
+	}
+}
+
+func TestIsNotFoundHelper(t *testing.T) {
+	if dns.IsNotFound(nil) {
+		t.Errorf("IsNotFound(nil) should be false")
+	}
+	if !dns.IsNotFound(dns.ErrNotFound) {
+		t.Errorf("IsNotFound(ErrNotFound) should be true")
+	}
+
+	netErrNotFound := &net.DNSError{IsNotFound: true}
+	if !dns.IsNotFound(netErrNotFound) {
+		t.Errorf("IsNotFound(&net.DNSError{IsNotFound: true}) should be true")
+	}
+
+	netErrTimeout := &net.DNSError{IsTimeout: true, IsNotFound: false}
+	if dns.IsNotFound(netErrTimeout) {
+		t.Errorf("IsNotFound(&net.DNSError{IsTimeout: true}) should be false")
+	}
+
+	genericErr := errors.New("connection reset by peer")
+	if dns.IsNotFound(genericErr) {
+		t.Errorf("IsNotFound(genericErr) should be false")
 	}
 }
