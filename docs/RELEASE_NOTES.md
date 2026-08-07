@@ -1,6 +1,6 @@
-# frizzlabs-ddns v1.1.0 Release Notes
+# frizzlabs-ddns v1.1.1 Release Notes
 
-Welcome to **`frizzlabs-ddns` v1.1.0** — a lightweight, zero-dependency Dynamic DNS IPv6 reconciliation daemon written in Go.
+Welcome to **`frizzlabs-ddns` v1.1.1** — a lightweight, zero-dependency Dynamic DNS IPv6 reconciliation daemon written in Go.
 
 ---
 
@@ -41,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/frizzycodes/frizzlabs-ddns/main/scr
 #### Manual Binary Setup:
 ```bash
 # Download binary matching your CPU architecture (e.g. amd64)
-curl -LO https://github.com/frizzycodes/frizzlabs-ddns/releases/download/v1.1.0/frizzlabs-ddns-linux-amd64
+curl -LO https://github.com/frizzycodes/frizzlabs-ddns/releases/download/v1.1.1/frizzlabs-ddns-linux-amd64
 chmod +x frizzlabs-ddns-linux-amd64
 sudo mv frizzlabs-ddns-linux-amd64 /usr/local/bin/frizzlabs-ddns
 
