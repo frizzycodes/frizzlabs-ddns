@@ -26,15 +26,15 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME}" -o dist/frizzlabs-ddns-linux-amd64 ./cmd/frizzlabs-ddns
           GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME}" -o dist/frizzlabs-ddns-linux-arm64 ./cmd/frizzlabs-ddns
           GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME}" -o dist/frizzlabs-ddns-linux-armv7 ./cmd/frizzlabs-ddns
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME}" -o dist/frizzlabs-ddns-windows-amd64.exe ./cmd/frizzlabs-ddns
+          GOOS=windows GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME}" -o dist/frizzlabs-ddns-windows-arm64.exe ./cmd/frizzlabs-ddns
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME}" -o dist/frizzlabs-ddns-darwin-amd64 ./cmd/frizzlabs-ddns
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${GITHUB_REF_NAME}" -o dist/frizzlabs-ddns-darwin-arm64 ./cmd/frizzlabs-ddns
           cd dist && sha256sum * > checksums.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/frizzlabs-ddns-linux-amd64
-            dist/frizzlabs-ddns-linux-arm64
-            dist/frizzlabs-ddns-linux-armv7
-            dist/checksums.txt
+          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
