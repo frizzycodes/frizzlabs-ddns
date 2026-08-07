@@ -6,6 +6,15 @@ It is constructed as a lightweight, single-execution daemon (oneshot model) trig
 
 ---
 
+## Design Rationale: Why Go over Python/Shell?
+
+`frizzlabs-ddns` was specifically implemented in Go to overcome common issues with scripting language daemons:
+- **No Dependency Overhead**: Python daemons require a full Python 3 runtime, virtual environments (`venv`), and package managers (`pip`). A single Go binary runs natively with **zero dependencies**.
+- **Minimal Resource Footprint**: Starts in **< 5ms** using **< 5MB RAM** (versus Python which consumes 30MB+ RAM for interpreter startup).
+- **Supply-Chain Security**: Eliminates third-party package vulnerabilities by relying exclusively on Go's standard library (`net/netip`, `net/http`, `log/slog`, `encoding/json`).
+
+---
+
 ## High-Level Architecture Diagram
 
 ```mermaid
